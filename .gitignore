@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+logs/
+*.xlsx
+*.env
+*_cache.json
+ukraine_holidays.json
+
+# Forecasting demo
+backend_forecasting/models/
+*.safetensors
+backend_forecasting/data/demo/features.parquet
+backend_forecasting/data/demo/avg_price.parquet
+backend_forecasting/data/demo/cost_prices.parquet
+backend_forecasting/data/demo/forecast_summary.parquet
+backend_forecasting/data/forecast/
+nul
