@@ -1,0 +1,127 @@
+:root {
+  --padding: 10px;
+  --menu-width: 120px;
+  --min-mainContent-with: 400px;
+  --rounded: 10px;
+
+  --indigo: #5603ad;
+  --primary: #e14eca;
+  --purple: #8918b6;
+  --background-body: #12141a;
+  --background-main-content: #191b24;
+  --menu-button: #340072;
+  --menu-button-focus: #5618a3;
+}
+
+body {
+  font-family: Poppins, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--indigo);
+  text-align: left;
+  background-color: var(--background-body);
+  margin: 0;
+  display: flex;
+  height: 100vh;
+}
+
+.menu {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  width: var(--menu-width);
+  padding: var(--padding);
+  background: linear-gradient(to bottom, var(--primary), var(--purple));
+  font-family: 'Ubuntu', sans-serif;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
+  color: black;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: var(--rounded);
+  z-index: 1000; /* Забезпечує, що меню завжди буде зверху */
+  height: auto; /* Висота адаптується до вмісту */
+  max-height: calc(100vh - 20px); /* Максимальна висота, щоб не виходити за межі екрану */
+  overflow-y: auto; /* Дозволяє прокрутку, якщо вміст не поміщається */
+}
+
+.menu .menu-button {
+  width: 100%;
+  padding: 15px;
+  background-color: var(--menu-button) ;
+  color: rgb(255, 255, 255);
+  border: none;
+  border-radius: 5px;
+  font-family: 'Ubuntu', sans-serif;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  white-space: normal;
+  word-wrap: break-word;
+  margin: 0;
+  text-align: left;
+  padding-right: var(--padding);
+  padding-top: var(--padding);
+  padding-bottom: var(--padding);
+}
+.menu .menu-button:hover {
+  background-color: var(--menu-button-focus);
+}
+
+.mainContent {
+  
+    margin-left: calc(var(--menu-width) + var(--padding) * 2); /* Adjusted margin-left to be right next to the menu with padding */  padding: var(--padding); /* Відступи зверху, знизу та справа */
+  flex: 1; /* Use flex: 1 to make it take all remaining space horizontally */
+  background-color: var(--background-main-content); /* Чорний фон */
+  color: white; /* Колір тексту для контрасту */
+  overflow-y: auto; /* Дозволяє прокрутку, якщо контенту багато */
+  height: calc(100vh - var(--padding) * 2); /* Висота блоку з урахуванням відступів */
+  box-sizing: border-box; /* Щоб padding не додавався до загальної ширини */
+  min-width: var(--min-mainContent-with); /* Мінімальна ширина блоку */
+  margin-top: var(--padding); /* Відступ зверху, щоб уникнути накладання на меню */
+  margin-bottom: var(--padding); /* Відступ знизу на 1 піксель */
+  border-radius: var(--rounded);
+  border-radius: var(--rounded);
+}
+
+.wrapper-date-input {
+  background-color: var(--background-body); /* Темно-сірий фон */
+  padding: var(--padding);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: fit-content;
+}
+
+.date-label {
+  color: #fff; /* Білий текст для контрасту */
+  font-size: 14px;
+  margin-bottom: 5px;
+  display: block;
+  font-family: 'Ubuntu', sans-serif;
+}
+
+.date-container {
+  display: flex;
+  gap: 10px; /* Відступ між полями */
+}
+
+.date-input {
+  width: 150px; /* Збільшений розмір */
+  padding: 8px;
+  font-size: 14px;
+  font-family: 'Ubuntu', sans-serif;
+ 
+  border-radius: 5px;
+  background-color: #f8f9fa;
+  color: #333;
+  outline: none;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.date-input:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
