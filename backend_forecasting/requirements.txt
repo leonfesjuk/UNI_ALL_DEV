@@ -1,0 +1,10 @@
+fastapi>=0.104.0
+uvicorn[standard]
+pydantic>=2.0.0
+pyyaml>=6.0
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=10.0
+chronos-forecasting>=2.0
+torch>=2.0.0
+accelerate>=0.26.0
