@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  forecasting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: backend-forecasting-1
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./:/app/forecasting
+      - model_cache:/app/forecasting/models
+    environment:
+      - FC_CONFIG=config/demo.yml
+    restart: always
+    networks:
+      - forecasting-network
+
+volumes:
+  model_cache:
+
+networks:
+  forecasting-network:
+    driver: bridge
