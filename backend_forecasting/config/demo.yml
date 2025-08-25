@@ -1,0 +1,6 @@
+mode: demo
+data_adapter: fake
+ai_adapter: kronos
+ml_enabled: true
+model_path: models/kronos2
+forecast_context_days: 730
