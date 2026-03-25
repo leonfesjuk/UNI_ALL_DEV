@@ -87,8 +87,18 @@ def load_category_map(path: str = "data/demo/category_map.json") -> dict[str, di
     return _CATEGORY_MAP
 
 def resolve_category_id(category_id: str) -> tuple[int, int]:
+    """Return (level_index, level_id) from the static category map."""
     m = load_category_map()
     entry = m.get(category_id)
     if entry is None:
         raise ValueError(f"Unknown category_id: {category_id}")
     return int(entry["level"]), int(entry["level_id"])
+
+
+def resolve_category_path(category_id: str) -> tuple[str, int]:
+    """Return (level_column, level_id) for a category id.
+
+    Used by demo dataset generators to filter the hierarchy column.
+    """
+    level, level_id = resolve_category_id(category_id)
+    return LEVEL_COLUMNS[level], level_id

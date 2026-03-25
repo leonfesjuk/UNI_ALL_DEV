@@ -1,28 +1,14 @@
-import numpy as np
-import pandas as pd
+"""Fallback AI adapter — deterministic mean-based prediction."""
 
+from core.features import baseline_mean_predict
 from core.ports.output import AIPort
 
 
 class FallbackAdapter(AIPort):
+    """Predicts the historical mean sales per product.
 
-    def predict(
-        self,
-        context: pd.DataFrame,
-        forecast_features: pd.DataFrame,
-    ) -> pd.DataFrame:
-        forecast = forecast_features.copy()
+    Used when the ML model is unavailable or disabled.
+    """
 
-        for pid in forecast["product_id"].unique():
-            hist = context[context["product_id"] == pid]["sales_qty"]
-
-            if hist.empty or len(hist) < 7:
-                fallback_qty = 0
-            else:
-                fallback_qty = hist.rolling(7, min_periods=1).mean().iloc[-1]
-
-            mask = forecast["product_id"] == pid
-            forecast.loc[mask, "sales_qty"] = max(round(fallback_qty), 0)
-
-        forecast["sales_qty"] = forecast["sales_qty"].astype(np.int32)
-        return forecast
+    def predict(self, context, forecast_features):
+        return baseline_mean_predict(context, forecast_features)

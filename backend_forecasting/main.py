@@ -1,23 +1,33 @@
-from datetime import date, timedelta
+"""Forecasting service entry point."""
 
-from fastapi import FastAPI, Query
+import logging
+import os
+from datetime import date, timedelta
+from pathlib import Path
+
 import pandas as pd
+from fastapi import FastAPI, Query
 
 from adapters.primary.api import router
 from config.category_types import LEVEL_COLUMNS
-from scripts.generate_demo_features import generate_features_dataset
 from scripts.generate_demo_avg_price import generate_avg_price_dataset
+from scripts.generate_demo_features import generate_features_dataset
 
-app = FastAPI(title="Forecasting Demo")
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Forecasting Service")
 app.include_router(router)
 
-_FEATURES_PATH = "data/demo/features.parquet"
+FEATURES_PATH = os.getenv(
+    "FC_FEATURES_PATH", "data/demo/features.parquet"
+)
 
 
 def _load_features() -> pd.DataFrame:
     try:
-        return pd.read_parquet(_FEATURES_PATH)
-    except Exception:
+        return pd.read_parquet(FEATURES_PATH)
+    except Exception as e:
+        logger.warning("Could not load features from %s: %s", FEATURES_PATH, e)
         return pd.DataFrame()
 
 
@@ -26,8 +36,7 @@ async def get_shops():
     df = _load_features()
     if df.empty:
         return {"shops": []}
-    shops = sorted(df["shop_id"].unique().tolist())
-    return {"shops": shops}
+    return {"shops": sorted(df["shop_id"].unique().tolist())}
 
 
 @app.get("/promo-forecast/categories")
@@ -51,47 +60,38 @@ async def get_products(
     col = LEVEL_COLUMNS[level]
     sub = df[df[col] == level_id]
     product_ids = sorted(sub["product_id"].unique().tolist())
-
-    products = []
-    for pid in product_ids:
-        products.append(
-            {
-                "product_id": int(pid),
-                "product_name": "",
-            }
-        )
-    return {"products": products}
+    return {
+        "products": [
+            {"product_id": int(pid), "product_name": ""}
+            for pid in product_ids
+        ]
+    }
 
 
 @app.post("/promo-forecast/generate-dataset")
 async def generate_dataset(
-    days: int = Query(..., description="Number of days of history from yesterday"),
+    days: int = Query(..., description="Days of history from yesterday"),
     shop_id: str = Query(..., description="Shop ID, e.g. RT-000001"),
     category_id: str = Query(..., description="Category ID, e.g. 00000134"),
 ):
     today = date.today()
     yesterday = today - timedelta(days=1)
     date_from = yesterday - timedelta(days=days - 1)
-    date_to = yesterday
 
-    period = f"{date_from.isoformat()}_{date_to.isoformat()}"
+    period = f"{date_from.isoformat()}_{yesterday.isoformat()}"
     base = f"data/demo/{shop_id}_{category_id}_{period}"
-
-    features_path = f"{base}_features.parquet"
-    prices_path = f"{base}_prices.parquet"
 
     f_result = generate_features_dataset(
         shop_id=shop_id,
         category_id=category_id,
         date_from=date_from,
-        date_to=date_to,
-        output=features_path,
+        date_to=yesterday,
+        output=f"{base}_features.parquet",
     )
-
     p_result = generate_avg_price_dataset(
         date_from=date_from,
-        date_to=date_to,
-        output=prices_path,
+        date_to=yesterday,
+        output=f"{base}_prices.parquet",
     )
 
     return {
@@ -100,7 +100,7 @@ async def generate_dataset(
         "category_id": category_id,
         "period": {
             "from": date_from.isoformat(),
-            "to": date_to.isoformat(),
+            "to": yesterday.isoformat(),
         },
         "features": {
             "path": f_result["output"],
