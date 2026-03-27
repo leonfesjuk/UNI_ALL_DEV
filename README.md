@@ -1,94 +1,150 @@
 # UNI Automated Ordering System
 
-Enterprise ERP system for automated ordering, redistribution, and demand forecasting in retail.
+> **Internship project** — built by Leonid Fesiuk as an unpaid intern for
+> a real retail company (2025–2026). All sensitive data (database
+> credentials, internal IPs, private domains) has been removed and
+> replaced with environment variable placeholders.
+
+---
+
+## What This System Does
+
+A full-stack ERP module that automates the daily ordering workflow of a
+retail chain with multiple warehouses and market locations. Before this
+system, category managers spent hours manually calculating restock
+quantities in Excel. After deployment, the same work is done in minutes
+through a web interface.
+
+The system answers four business questions automatically:
+
+1. **How much should we order?** — calculates replenishment quantities
+   based on sales velocity, seasonality, promo calendar, and supplier
+   lead times
+2. **Where should stock be moved?** — generates redistribution plans
+   between markets that have excess and markets that are short
+3. **What will sell during a promotion?** — forecasts demand with and
+   without a promo using a Chronos-2 time-series model, including
+   margin impact per product
+4. **What are we losing?** — identifies out-of-stock products,
+   archive candidates, and lost revenue from supply gaps
+
+---
+
+## Key Business Logic
+
+### Auto-Ordering Engine
+- **SDP (Sales Demand Prediction)** — weighted moving average of daily
+  sales with seasonality adjustments
+- **ABC/XYZ classification** — vectorized product prioritisation for
+  order allocation when supplier capacity is limited
+- **Insurance balance** — safety stock that scales with lead time and
+  demand volatility; doubles when stock covers fewer than 2 days
+- **Promo-aware ordering** — future promotions are factored into demand
+  so the system orders ahead of campaign starts
+
+### Market Redistribution
+Generates transfer orders between locations using a greedy allocator
+that minimises transport cost while respecting pack-size constraints
+(products can only move in multiples of their case pack).
+
+### Forecasting Service
+- Chronos-2 model (zero-shot time-series forecasting) with cross-learning
+  across products in the same category
+- Feature pipeline: sales history, daily prices, promo flags, weather
+  (morning/afternoon feels-like and precipitation IDs), public holidays,
+  and 5-level product category hierarchy
+- Compares "with promo" vs "baseline" scenarios and outputs margin
+  impact per product per day, exported to Excel for category managers
+
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Frontend (React)                      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐   │
-│  │AutoOrder │ │Insurance │ │Redistrib.│ │  Dashboard   │   │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────────┘   │
-└────────────────────────┬────────────────────────────────────┘
-                         │ REST API
-┌────────────────────────▼────────────────────────────────────┐
-│                    Backend (FastAPI)                         │
-│  ┌──────────────┐ ┌──────────────┐ ┌────────────────────┐  │
-│  │ Auto-Order   │ │Redistribution│ │  Price Analysis    │  │
-│  │  (Warehouse) │ │   Engine     │ │  (Out Products)    │  │
-│  └──────────────┘ └──────────────┘ └────────────────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│              Backend Forecasting (Clean Arch)                │
-│  ┌──────────────┐ ┌──────────────┐ ┌────────────────────┐  │
-│  │   Domain     │ │  Use Cases   │ │     Adapters       │  │
-│  │ (Entities)   │ │ (Forecasting)│ │ (Kronos-2, ERP)    │  │
-│  └──────────────┘ └──────────────┘ └────────────────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│                  Data Layer                                  │
-│  ┌──────────────┐              ┌────────────────────┐       │
-│  │    MySQL     │              │    PostgreSQL      │       │
-│  │  (ERP Data)  │              │  (Order Storage)   │       │
-│  └──────────────┘              └────────────────────┘       │
-└─────────────────────────────────────────────────────────────┘
+Frontend (React 18 + MUI)
+    │  REST
+    ▼
+Backend (FastAPI + SQLAlchemy)
+    │  ├─ autoorder/        order calculation, SDP, ABC analysis
+    │  ├─ autoorder_m/      market-level auto-ordering
+    │  ├─ redistribution/   inter-location stock transfers
+    │  ├─ insurance_balance/ safety stock calculation
+    │  ├─ out_product/      out-of-stock and archive detection
+    │  ├─ sales_looses/     lost revenue analysis
+    │  └─ prices/           price + stock snapshots
+    │
+    ▼
+Forecasting Service (Clean Architecture)
+    │  ├─ core/domain/      entities, value objects
+    │  ├─ core/usecases/    forecast_for_group, build_features
+    │  ├─ core/ports/       DataInputGateway, AIPort interfaces
+    │  └─ adapters/         ERP gateway, Kronos-2, fallback, fake
+    │
+    ▼
+Data Layer
+    ├─ MySQL    live ERP data (products, prices, promos, receipts)
+    └─ PostgreSQL generated orders and forecast results
 ```
+
+---
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
-| Backend API | FastAPI, Hypercorn |
-| ORM | SQLAlchemy 2.0 |
-| Databases | MySQL 8, PostgreSQL 15 |
-| Frontend | React 18, Vite, Material-UI |
-| Forecasting | PyTorch, Chronos-2 |
-| Containerization | Docker, Docker Compose |
-| Proxy | Nginx |
+| Layer | Technology |
+|-------|-----------|
+| API | FastAPI, Hypercorn, Pydantic v2 |
+| ORM | SQLAlchemy 2.0 (declarative, session-per-request with retry) |
+| Databases | MySQL 8 (ERP source), PostgreSQL 15 (order storage) |
+| Frontend | React 18, Vite 6, Material-UI 6, React Router 7 |
+| ML Forecasting | PyTorch, Chronos-2 (zero-shot), NumPy/Pandas |
+| Excel Export | openpyxl, xlsxwriter, SheetJS (browser-side) |
+| Infrastructure | Docker, Docker Compose, Nginx reverse proxy |
 
-## Features
-
-- **Auto-Ordering** — Automated order calculation for warehouse restocking
-- **Market Redistribution** — Intelligent stock redistribution between markets
-- **Insurance Balance** — Safety stock calculation with seasonality
-- **Demand Forecasting** — ML-based sales prediction using Chronos-2
-- **Price Analysis** — Out-product and market-down identification
-- **Sales Loss Tracking** — Lost revenue analysis
+---
 
 ## Project Structure
 
 ```
 UNI_ALL_DEV/
-├── backend/                    # FastAPI backend
-│   ├── api/                   # API routes and helpers
-│   ├── autoorder/             # Auto-ordering logic
-│   ├── autoorder_m/           # Market auto-ordering
-│   ├── redistribution/        # Redistribution engine
-│   ├── insurance_balance/     # Insurance balance calc
-│   ├── out_product/           # Out-product analysis
-│   ├── sales_looses/          # Sales loss tracking
-│   └── config/                # Configuration
+├── backend/
+│   ├── api/                  FastAPI app, helpers, Excel export
+│   ├── autoorder/            warehouse ordering, analysis, DB layer
+│   ├── autoorder_m/          market auto-ordering with category groups
+│   ├── redistribution/       inter-market stock transfer engine
+│   ├── insurance_balance/    safety stock calculator
+│   ├── out_product/          out-of-stock, archive, market-down analysis
+│   ├── sales_looses/         lost sales revenue tracking
+│   ├── prices/               price + stock snapshot service
+│   ├── gui/                  legacy Flask dashboard
+│   └── nginx/                reverse proxy config
 │
-├── backend_forecasting/       # Forecasting service (Clean Architecture)
+├── backend_forecasting/      Forecasting microservice
 │   ├── core/
-│   │   ├── domain/           # Entities, value objects
-│   │   ├── usecases/         # Business logic
-│   │   └── ports/            # Interfaces
+│   │   ├── domain/           PromoScenario, ForecastResult entities
+│   │   ├── usecases/         forecast_for_group, build_features
+│   │   ├── features.py       shared pandas transformations
+│   │   ├── gateway/          DataInputGateway port
+│   │   └── ports/            AIPort interface
 │   ├── adapters/
-│   │   ├── primary/          # API adapters
-│   │   └── secondary/        # Data/AI adapters
-│   └── config/               # Settings
+│   │   ├── primary/          FastAPI router
+│   │   └── secondary/        ERP gateway, Kronos-2, fallback, fake
+│   ├── config/               settings, weather, holidays, categories
+│   └── scripts/              demo dataset generators
 │
-├── frontend/                  # React frontend
-│   └── src/
-│       ├── components/       # UI components
-│       └── services/         # API clients
-│
-└── docker-compose.yml         # Orchestration
+└── frontend/
+    └── src/
+        ├── components/
+        │   ├── autoorderw/   warehouse ordering UI
+        │   ├── autoorderm/   market ordering UI
+        │   ├── insurance/    insurance balance UI
+        │   ├── redistribution/ stock transfer UI
+        │   ├── outProducts/  out-product analysis UI
+        │   ├── salesLooses/  sales loss UI
+        │   └── deshboard/    overview dashboard
+        └── services/         API client, date validation
 ```
+
+---
 
 ## Getting Started
 
@@ -101,23 +157,20 @@ UNI_ALL_DEV/
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/leonfesjuk/UNI_ALL_DEV.git
 cd UNI_ALL_DEV
 ```
 
 2. Create environment files:
 ```bash
-# Backend
 cp backend/.env.example backend/.env
-# Edit backend/.env with your database credentials
-
-# Frontend
 cp frontend/.env.example frontend/.env
-# Edit frontend/.env with your API URL
+# Edit both files with your own database credentials and API URL
 ```
 
 3. Start the application:
 ```bash
+cd backend
 docker-compose up --build
 ```
 
@@ -126,9 +179,11 @@ The application will be available at:
 - API: http://localhost:8000
 - API Docs: http://localhost:8000/docs
 
+---
+
 ## Environment Variables
 
-### Backend (.env)
+### Backend (`backend/.env`)
 
 | Variable | Description |
 |----------|-------------|
@@ -143,19 +198,32 @@ The application will be available at:
 | `DB_POSTGRES_PASSWORD` | PostgreSQL password |
 | `DB_POSTGRES_DATABASE` | PostgreSQL database name |
 
-### Frontend (.env)
+### Frontend (`frontend/.env`)
 
 | Variable | Description |
 |----------|-------------|
 | `VITE_PORT` | Development server port |
 | `VITE_API_BASE_URL` | Backend API base URL |
 
-## API Documentation
+---
 
-Once running, interactive API documentation is available at:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+## Security Notice
+
+This repository is a **sanitised public version** of a production
+internship project. The following has been removed or replaced:
+
+- All database credentials (moved to `.env` files, git-ignored)
+- Internal IP addresses and private domain names
+- Real product, supplier, and customer identifiers
+- Generated data files (`.parquet`, model weights, caches)
+- Compiled bytecode (`__pycache__`)
+
+The `.env.example` files contain only placeholder values. No real
+secrets exist in the git history or the current working tree.
+
+---
 
 ## License
 
 This project is proprietary and confidential.
+Built as an unpaid internship project for a private retail company.
