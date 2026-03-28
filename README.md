@@ -30,6 +30,52 @@ The system answers four business questions automatically:
 
 ---
 
+## How It Works
+
+Every morning the system reads live ERP data (sales history, stock
+levels, promo calendar, weather, supplier lead times) and turns it
+into concrete decisions:
+
+```
+                   ┌──────────────────────────────────┐
+                   │   UNI AUTOMATED ORDERING SYSTEM   │
+                   │                                   │
+                   │   Reads from ERP every morning:   │
+                   │     • sales history & stock       │
+                   │     • promo calendar              │
+                   │     • weather & holidays          │
+                   │     • supplier lead times         │
+                   │                                   │
+                   │   Answers:                        │
+                   │     • How much should we buy?     │
+                   │     • Where should stock go?      │
+                   │     • What will sell on promo?    │
+                   │     • What are we losing?         │
+                   └─────────────────┬─────────────────┘
+                                     │
+         ┌───────────────────────────┼───────────────────────────┐
+         ▼                           ▼                           ▼
+   ┌─────────────────┐   ┌───────────────────┐   ┌─────────────────┐
+   │ PURCHASE ORDER  │   │ DISTRIBUTION PLAN │   │ PROMO FORECAST  │
+   ├─────────────────┤   ├───────────────────┤   ├─────────────────┤
+   │ Supplier A      │   │ Store 003 ← 120   │   │ Baseline:  450  │
+   │    240 pcs      │   │ Store 007 ←  85   │   │ With promo: 620 │
+   │ Supplier B      │   │ Store 012 ← 200   │   │ Margin:  +12.4k │
+   │    180 pcs      │   │ Store 021 ←  60   │   │                 │
+   │ ─────────────── │   │ ───────────────── │   │ ─────────────── │
+   │ Total:   420    │   │ Total:     465    │   │ Lost:    34.2k  │
+   └─────────────────┘   └───────────────────┘   └─────────────────┘
+```
+
+- **Purchase order** — exact quantities to buy from each supplier,
+  respecting pack size and lead time
+- **Distribution plan** — exact quantities to ship from each warehouse
+  to each market that is running short
+- **Promo forecast** — Chronos-2 model predicts baseline vs promo
+  sales per product, with margin impact and loss alerts
+
+---
+
 ## Key Business Logic
 
 ### Auto-Ordering Engine
