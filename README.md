@@ -23,8 +23,8 @@ The system answers four business questions automatically:
 2. **Where should stock be moved?** — generates redistribution plans
    between markets that have excess and markets that are short
 3. **What will sell during a promotion?** — forecasts demand with and
-   without a promo using a Chronos-2 time-series model, including
-   margin impact per product
+   without a promo using a fine-tuned Chronos-2 AI model in a separate
+   forecasting service, including margin impact per product
 4. **What are we losing?** — identifies out-of-stock products,
    archive candidates, and lost revenue from supply gaps
 
@@ -37,50 +37,70 @@ levels, promo calendar, weather, supplier lead times) and turns it
 into concrete decisions:
 
 ```
-                   ┌──────────────────────────────────┐
-                   │   UNI AUTOMATED ORDERING SYSTEM   │
-                   │                                   │
-                   │   Reads from ERP every morning:   │
-                   │     • sales history & stock       │
-                   │     • promo calendar              │
-                   │     • weather & holidays          │
-                   │     • supplier lead times         │
-                   │                                   │
-                   │   Answers:                        │
-                   │     • How much should we buy?     │
-                   │     • Where should stock go?      │
-                   │     • What will sell on promo?    │
-                   │     • What are we losing?         │
-                   └─────────────────┬─────────────────┘
+                  ┌────────────────────────────────────┐
+                  │   UNI AUTOMATED ORDERING SYSTEM    │
+                  │                                    │
+                  │   Reads from ERP every morning:    │
+                  │     • sales history & stock        │
+                  │     • promo calendar               │
+                  │     • weather & holidays           │
+                  │     • supplier lead times          │
+                  │                                    │
+                  │   Answers:                         │
+                  │     • How much should we buy?      │
+                  │     • Where should stock go?       │
+                  │     • What will sell on promo?     │
+                  │     • What are we losing?          │
+                  └──────────────────┬─────────────────┘
                                      │
-         ┌───────────────────────────┼───────────────────────────┐
-         ▼                           ▼                           ▼
-   ┌─────────────────┐   ┌───────────────────┐   ┌─────────────────┐
-   │ PURCHASE ORDER  │   │ DISTRIBUTION PLAN │   │ PROMO FORECAST  │
-   ├─────────────────┤   ├───────────────────┤   ├─────────────────┤
-   │ Supplier A      │   │ Store 003 ← 120   │   │ Baseline:  450  │
-   │    240 pcs      │   │ Store 007 ←  85   │   │ With promo: 620 │
-   │ Supplier B      │   │ Store 012 ← 200   │   │ Margin:  +12.4k │
-   │    180 pcs      │   │ Store 021 ←  60   │   │                 │
-   │ ─────────────── │   │ ───────────────── │   │ ─────────────── │
-   │ Total:   420    │   │ Total:     465    │   │ Lost:    34.2k  │
-   └─────────────────┘   └───────────────────┘   └─────────────────┘
+           ┌─────────────────────────┴─────────────────────────┐
+           ▼                                                   ▼
+┌────────────────────────────┐               ┌────────────────────────────┐
+│ BACKEND SERVICE            │               │ FORECASTING SERVICE        │
+│ (business logic — math,    │               │ (AI — neural network)      │
+│  rules & optimisation)     │               │                            │
+│                            │               │ Kronos-2 (Chronos-2)       │
+│ • ADS demand prediction    │               │ time-series model,         │
+│ • ABC/XYZ classification   │               │ fine-tuned on 2 years      │
+│ • safety stock insurance   │               │ of daily sales history     │
+│ • greedy cost allocation   │               │                            │
+└──────┬──────────────┬──────┘               └─────────────┬──────────────┘
+       ▼              ▼                                    ▼
+┌────────────────┐ ┌────────────────┐          ┌──────────────────────┐
+│ PURCHASE ORDER │ │DISTRIBUTION PLN│          │ PROMO FORECAST       │
+├────────────────┤ ├────────────────┤          ├──────────────────────┤
+│ Supplier A     │ │ Store 003 ←120 │          │ Baseline:       450  │
+│    240 pcs     │ │ Store 007 ← 85 │          │ With promo:     620  │
+│ Supplier B     │ │ Store 012 ←200 │          │ Margin:      +12.4k  │
+│    180 pcs     │ │ Store 021 ← 60 │          │ Lost:         34.2k  │
+│ ────────────── │ │ ────────────── │          │ ──────────────────── │
+│ Total:    420  │ │ Total:     465 │          │ AI prediction,       │
+└────────────────┘ └────────────────┘          │ not a formula        │
+                                               └──────────────────────┘
 ```
+
+The two services run in parallel every morning. The **backend** is the
+deterministic side — every decision comes from formulas, rules and
+optimisation (ADS, ABC/XYZ analysis, safety stock, greedy allocation).
+The **forecasting service** is the AI side — a neural network trained
+on two years of real sales data learns demand patterns on its own and
+produces numbers no formula could calculate.
 
 - **Purchase order** — exact quantities to buy from each supplier,
   respecting pack size and lead time
 - **Distribution plan** — exact quantities to ship from each warehouse
   to each market that is running short
-- **Promo forecast** — Chronos-2 model predicts baseline vs promo
-  sales per product, with margin impact and loss alerts
+- **Promo forecast** — the AI service predicts baseline vs promo sales
+  per product per day, with margin impact and loss alerts
 
 ---
 
 ## Key Business Logic
 
 ### Auto-Ordering Engine
-- **SDP (Sales Demand Prediction)** — weighted moving average of daily
-  sales with seasonality adjustments
+- **ADS — Average Daily Sales** (Ukrainian abbreviation SDP,
+  "середньоденні продажі") — weighted moving average of daily sales
+  with seasonality adjustments
 - **ABC/XYZ classification** — vectorized product prioritisation for
   order allocation when supplier capacity is limited
 - **Insurance balance** — safety stock that scales with lead time and
@@ -93,14 +113,33 @@ Generates transfer orders between locations using a greedy allocator
 that minimises transport cost while respecting pack-size constraints
 (products can only move in multiples of their case pack).
 
-### Forecasting Service
-- Chronos-2 model (zero-shot time-series forecasting) with cross-learning
-  across products in the same category
-- Feature pipeline: sales history, daily prices, promo flags, weather
-  (morning/afternoon feels-like and precipitation IDs), public holidays,
-  and 5-level product category hierarchy
-- Compares "with promo" vs "baseline" scenarios and outputs margin
-  impact per product per day, exported to Excel for category managers
+### Forecasting Service (AI)
+
+A standalone microservice (`backend_forecasting/`) that runs in
+parallel with the backend — while the backend calculates, the
+forecasting service predicts.
+
+- **Kronos-2 (Chronos-2)** — a time-series neural network, fine-tuned
+  on two years of daily sales history, with cross-learning across
+  products in the same category
+- The fine-tuned checkpoint is loaded from a local path
+  (`models/kronos2`) at service start
+- The model sees everything that shapes demand, not just sales: sales
+  history, daily prices, promo flags, **weather** (morning and
+  afternoon feels-like temperature, **rain/precipitation IDs**),
+  **public holidays**, and the 5-level product category hierarchy
+- Runs two scenarios — "with promo" and "baseline" — and outputs the
+  margin impact per product per day, exported to Excel for category
+  managers
+
+**Why a separate AI service?** The backend is a mathematical-logic
+model: fixed formulas and rules that a manager can audit line by line.
+Promo forecasting is a prediction problem — it needs a model that
+learns non-linear patterns (seasonality, weather, holidays,
+price-promo interaction) from historical data instead of computing
+them. Keeping it separate means the AI can be retrained and redeployed
+without touching the order-calculating code, and the core ERP keeps
+working even when the model is unavailable (fallback adapter).
 
 ---
 
@@ -109,27 +148,22 @@ that minimises transport cost while respecting pack-size constraints
 ```
 Frontend (React 18 + MUI)
     │  REST
-    ▼
-Backend (FastAPI + SQLAlchemy)
-    │  ├─ autoorder/        order calculation, SDP, ABC analysis
-    │  ├─ autoorder_m/      market-level auto-ordering
-    │  ├─ redistribution/   inter-location stock transfers
-    │  ├─ insurance_balance/ safety stock calculation
-    │  ├─ out_product/      out-of-stock and archive detection
-    │  ├─ sales_looses/     lost revenue analysis
-    │  └─ prices/           price + stock snapshots
-    │
-    ▼
-Forecasting Service (Clean Architecture)
-    │  ├─ core/domain/      entities, value objects
-    │  ├─ core/usecases/    forecast_for_group, build_features
-    │  ├─ core/ports/       DataInputGateway, AIPort interfaces
-    │  └─ adapters/         ERP gateway, Kronos-2, fallback, fake
-    │
-    ▼
+    ├──────────────────────────────┐
+    ▼                              ▼
+Backend (FastAPI + SQLAlchemy)    Forecasting Service (Clean Architecture)
+    │  ├─ autoorder/              │  ├─ core/domain/      entities, value objects
+    │  ├─ autoorder_m/            │  ├─ core/usecases/    forecast_for_group, build_features
+    │  ├─ redistribution/         │  ├─ core/ports/       DataInputGateway, AIPort interfaces
+    │  ├─ insurance_balance/      │  └─ adapters/         ERP gateway, Kronos-2, fallback, fake
+    │  ├─ out_product/            │
+    │  ├─ sales_looses/           │
+    │  └─ prices/                 │
+    │                             │
+    └──────────────┬──────────────┘
+                   ▼
 Data Layer
-    ├─ MySQL    live ERP data (products, prices, promos, receipts)
-    └─ PostgreSQL generated orders and forecast results
+├─ MySQL    live ERP data (products, prices, promos, receipts)
+└─ PostgreSQL generated orders and forecast results
 ```
 
 ---
@@ -142,7 +176,7 @@ Data Layer
 | ORM | SQLAlchemy 2.0 (declarative, session-per-request with retry) |
 | Databases | MySQL 8 (ERP source), PostgreSQL 15 (order storage) |
 | Frontend | React 18, Vite 6, Material-UI 6, React Router 7 |
-| ML Forecasting | PyTorch, Chronos-2 (zero-shot), NumPy/Pandas |
+| ML Forecasting | PyTorch, Kronos-2 / Chronos-2 (fine-tuned), NumPy/Pandas |
 | Excel Export | openpyxl, xlsxwriter, SheetJS (browser-side) |
 | Infrastructure | Docker, Docker Compose, Nginx reverse proxy |
 
